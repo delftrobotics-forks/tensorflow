@@ -2659,8 +2659,219 @@ class Cropping3D(Layer):
     config = {'cropping': self.cropping, 'data_format': self.data_format}
     base_config = super(Cropping3D, self).get_config()
     return dict(list(base_config.items()) + list(config.items()))
+###############################################################################################
 
 
+@keras_export('keras.layers.Conv2DOctave',
+              'keras.layers.Convolution2DOctave')
+class Convolution2DOctave(Conv2D):
+  """Octave convolution layer.
+
+  References:
+    - [Drop an Octave: Reducing Spatial Redundancy in
+      Convolutional Neural Networks with Octave Convolution]
+      (https://arxiv.org/abs/1904.05049)
+  """
+
+  def __init__(self,
+               filters,
+               alpha,
+               kernel_size,
+               frequencies=None
+               strides=(1, 1),
+               padding='valid',
+               data_format=None,
+               dilation_rate=(1, 1),
+               activation=None,
+               use_bias=True,
+               kernel_initializer='glorot_uniform',
+               bias_initializer='zeros',
+               kernel_regularizer=None,
+               bias_regularizer=None,
+               activity_regularizer=None,
+               kernel_constraint=None,
+               bias_constraint=None,
+               **kwargs):
+    super(Convolution2DOctave, self).__init__(
+        filters=filters,
+        kernel_size=kernel_size,
+        strides=strides,
+        padding=padding,
+        data_format=data_format,
+        dilation_rate=dilation_rate,
+        activation=activations.get(activation),
+        use_bias=use_bias,
+        kernel_initializer=initializers.get(kernel_initializer),
+        bias_initializer=initializers.get(bias_initializer),
+        kernel_regularizer=regularizers.get(kernel_regularizer),
+        bias_regularizer=regularizers.get(bias_regularizer),
+        activity_regularizer=regularizers.get(activity_regularizer),
+        kernel_constraint=constraints.get(kernel_constraint),
+        bias_constraint=constraints.get(bias_constraint),
+        **kwargs)
+
+    self.alpha = alpha
+    if alpha < 0 or alpha > 1:
+      raise ValueError('Alpha ' + str(self.alpha) + ' must be between'
+                       '0 and 1')
+
+    self.low_channels = int(self.filters * self.alpha)
+    self.high_channels = self.filters - self.low_channels
+
+  def build(self, input_shape):
+    if len(input_shape) != 2 || len(input_shape[0]) != 4 || len(input_shape[1]) != 4:
+      raise ValueError('Inputs should be a pair of inputs of rank 4. Received input shape: ' +
+                       str(input_shape))
+    if self.data_format == 'channels_first':
+      channel_axis = 1
+    else:
+      channel_axis = -1
+    if input_shape.dims[channel_axis].value is None:
+      raise ValueError('The channel dimension of the inputs '
+                       'should be defined. Found `None`.')
+    #TODO check low an high inputs
+
+    input_high_dim = int(input_shape[0][channel_axis])
+    input_low_dim  = int(input_shape[1][channel_axis])
+
+
+    high_to_high_kernel_shape = self.kerne_size + (self.high_channels,
+                                                   input_high_dim)
+    high_to_low_kernel_shape  = self.kerne_size + (self.low_channels,
+                                                   input_high_dim)
+    low_to_high_kernel_shape  = self.kerne_size + (self.high_channels,
+                                                   input_low_dim)
+    low_to_low_kernel_shape   = self.kerne_size + (self.low_channels,
+                                                   input_low_dim)
+
+    self.high_to_high_kernel = self.add_weight(
+        name='high_to_high_kernel',
+        shape=high_to_high_kernel_shape,
+        initializer=self.kernel_initializer,
+        regularizer=self.kernel_regularizer,
+        constraint=self.kernel_constraint,
+        trainable=True,
+        dtype=self.dtype)
+    self.high_to_low_kernel = self.add_weight(
+        name='high_to_low_kernel',
+        shape=high_to_low_kernel_shape,
+        initializer=self.kernel_initializer,
+        regularizer=self.kernel_regularizer,
+        constraint=self.kernel_constraint,
+        trainable=True,
+        dtype=self.dtype)
+    self.low_to_high_kernel = self.add_weight(
+        name='low_to_high_kernel',
+        shape=low_to_high_kernel_shape,
+        initializer=self.kernel_initializer,
+        regularizer=self.kernel_regularizer,
+        constraint=self.kernel_constraint,
+        trainable=True,
+        dtype=self.dtype)
+    self.low_to_low_kernel = self.add_weight(
+        name='low_to_low_kernel',
+        shape=low_to_low_kernel_shape,
+        initializer=self.kernel_initializer,
+        regularizer=self.kernel_regularizer,
+        constraint=self.kernel_constraint,
+        trainable=True,
+        dtype=self.dtype)
+    if self.use_bias:
+      raise ValueError('Bias not supported.')
+    else:
+      self.bias = None
+
+    self._h_t_h_convolution_op = nn_ops.Convolution(
+        input_high_dim,
+        filter_shape=self.high_to_high_kernel.shape,
+        dilation_rate=self.dilation_rate,
+        strides=self.strides,
+        padding=op_padding,
+        data_format=conv_utils.convert_data_format(self.data_format,
+                                                   self.rank + 2))
+    self._h_t_l_convolution_op = nn_ops.Convolution(
+        input_high_dim,
+        filter_shape=self.high_to_low_kernel.shape,
+        dilation_rate=self.dilation_rate,
+        strides=self.strides,
+        padding=op_padding,
+        data_format=conv_utils.convert_data_format(self.data_format,
+                                                   self.rank + 2))
+    self._l_t_h_convolution_op = nn_ops.Convolution(
+        input_low_dim,
+        filter_shape=self.low_to_high_kernel.shape,
+        dilation_rate=self.dilation_rate,
+        strides=self.strides,
+        padding=op_padding,
+        data_format=conv_utils.convert_data_format(self.data_format,
+                                                   self.rank + 2))
+    self._l_t_l_convolution_op = nn_ops.Convolution(
+        input_low_dim,
+        filter_shape=self.low_to_low_kernel.shape,
+        dilation_rate=self.dilation_rate,
+        strides=self.strides,
+        padding=op_padding,
+        data_format=conv_utils.convert_data_format(self.data_format,
+                                                   self.rank + 2))
+
+    self.built = True
+
+  def call(self, inputs):
+    if len(inputs) != 2:
+      raise ValueError('2 inputs should be provided.')
+
+
+    high_input, low_input = inputs
+
+    # high to high
+    high_to_high = self._h_t_h_convolution_op(high_input, self.high_to_high_kernel)
+
+    # high to low
+    if self.data_format == 'channels_first':
+      strides = (1, 1, 2, 2)
+      pool_size = (1, 1, 2, 2)
+    else:
+      strides = (1, 2, 2, 1)
+      pool_size = (1, 2, 2, 1)
+    high_to_low = nn_ops.avg_pool(high_input, pool_size, strides, 'VALID')
+    high_to_low = self._h_t_l_convolution_op(high_to_low, self.high_to_low_kernel)
+
+    # low to high
+    low_to_high = self._l_t_h_convolution_op(low_input,  self.low_to_high_kernel)
+    low_to_high = backend.repeat_elements(low_to_high, 2, axis=1)
+    low_to_high = backend.repeat_elements(low_to_high, 2, axis=2)
+
+    # high to low
+    low_to_low   = self._l_t_l_convolution_op(low_input,  self.low_to_low_kernel)
+
+    # cross add
+    high_add = high_to_high + low_to_high
+    low_add = high_to_low + low_to_low
+    return [high_add, low_add]
+
+  def compute_output_shape(self, input_shapes):
+    if len(input_shape) != 2 || len(input_shape[0]) != 4 || len(input_shape[1]) != 4:
+      raise ValueError('Inputs should be a pair of inputs of rank 4. Received input shape: ' +
+                       str(input_shape))
+    if self.data_format == 'channels_first':
+      channel_axis = 1
+    else:
+      channel_axis = -1
+    if input_shape.dims[channel_axis].value is None:
+      raise ValueError('The channel dimension of the inputs '
+                       'should be defined. Found `None`.')
+    #TODO compute this correctly
+    high_in_shape, low_in_shape = input_shapes
+    high_out_shape = (*high_in_shape[:3], self.high_channels)
+    low_out_shape = (*low_in_shape[:3], self.low_channels)
+    return [high_out_shape, low_out_shape]
+
+
+  def get_config(self):
+    config = super(Conv2D, self).get_config()
+    config['alpha'] = self.alpha
+    return config
+'''
 # Aliases
 
 Convolution1D = Conv1D
@@ -2672,3 +2883,4 @@ Convolution2DTranspose = Conv2DTranspose
 Convolution3DTranspose = Conv3DTranspose
 Deconvolution2D = Deconv2D = Conv2DTranspose
 Deconvolution3D = Deconv3D = Conv3DTranspose
+Convolution2DOctave = Conv2DOctave
