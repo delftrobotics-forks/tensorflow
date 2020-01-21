@@ -61,6 +61,7 @@ def ResNet(stack_fn,
            input_shape=None,
            pooling=None,
            classes=1000,
+           trainable_bn=True,
            **kwargs):
   """Instantiates the ResNet, ResNetV2, and ResNeXt architecture.
 
@@ -103,6 +104,7 @@ def ResNet(stack_fn,
     classes: optional number of classes to classify images
       into, only to be specified if `include_top` is True, and
       if no `weights` argument is specified.
+    trainable_bn: whether to set BatchNormalization layers as trainable.
     **kwargs: For backwards compatibility only.
 
   Returns:
@@ -153,7 +155,10 @@ def ResNet(stack_fn,
 
   if not preact:
     x = layers.BatchNormalization(
-        axis=bn_axis, epsilon=1.001e-5, name='conv1_bn')(
+        axis=bn_axis,
+        epsilon=1.001e-5,
+        name='conv1_bn',
+        trainable=trainable_bn)(
             x)
     x = layers.Activation('relu', name='conv1_relu')(x)
 
@@ -164,7 +169,7 @@ def ResNet(stack_fn,
 
   if preact:
     x = layers.BatchNormalization(
-        axis=bn_axis, epsilon=1.001e-5, name='post_bn')(
+        axis=bn_axis, epsilon=1.001e-5, name='post_bn', trainable=trainable_bn)(
             x)
     x = layers.Activation('relu', name='post_relu')(x)
 
@@ -207,7 +212,13 @@ def ResNet(stack_fn,
   return model
 
 
-def block1(x, filters, kernel_size=3, stride=1, conv_shortcut=True, name=None):
+def block1(x,
+           filters,
+           kernel_size=3,
+           stride=1,
+           conv_shortcut=True,
+           name=None,
+           trainable_bn=True):
   """A residual block.
 
   Arguments:
@@ -218,6 +229,7 @@ def block1(x, filters, kernel_size=3, stride=1, conv_shortcut=True, name=None):
     conv_shortcut: default True, use convolution shortcut if True,
         otherwise identity shortcut.
     name: string, block label.
+    trainable_bn: whether to set BatchNormalization layers as trainable.
 
   Returns:
     Output tensor for the residual block.
@@ -229,14 +241,20 @@ def block1(x, filters, kernel_size=3, stride=1, conv_shortcut=True, name=None):
         4 * filters, 1, strides=stride, name=name + '_0_conv')(
             x)
     shortcut = layers.BatchNormalization(
-        axis=bn_axis, epsilon=1.001e-5, name=name + '_0_bn')(
+        axis=bn_axis,
+        epsilon=1.001e-5,
+        name=name + '_0_bn',
+        trainable=trainable_bn)(
             shortcut)
   else:
     shortcut = x
 
   x = layers.Conv2D(filters, 1, strides=stride, name=name + '_1_conv')(x)
   x = layers.BatchNormalization(
-      axis=bn_axis, epsilon=1.001e-5, name=name + '_1_bn')(
+      axis=bn_axis,
+      epsilon=1.001e-5,
+      name=name + '_1_bn',
+      trainable=trainable_bn)(
           x)
   x = layers.Activation('relu', name=name + '_1_relu')(x)
 
@@ -244,13 +262,19 @@ def block1(x, filters, kernel_size=3, stride=1, conv_shortcut=True, name=None):
       filters, kernel_size, padding='SAME', name=name + '_2_conv')(
           x)
   x = layers.BatchNormalization(
-      axis=bn_axis, epsilon=1.001e-5, name=name + '_2_bn')(
+      axis=bn_axis,
+      epsilon=1.001e-5,
+      name=name + '_2_bn',
+      trainable=trainable_bn)(
           x)
   x = layers.Activation('relu', name=name + '_2_relu')(x)
 
   x = layers.Conv2D(4 * filters, 1, name=name + '_3_conv')(x)
   x = layers.BatchNormalization(
-      axis=bn_axis, epsilon=1.001e-5, name=name + '_3_bn')(
+      axis=bn_axis,
+      epsilon=1.001e-5,
+      name=name + '_3_bn',
+      trainable=trainable_bn)(
           x)
 
   x = layers.Add(name=name + '_add')([shortcut, x])
@@ -258,7 +282,7 @@ def block1(x, filters, kernel_size=3, stride=1, conv_shortcut=True, name=None):
   return x
 
 
-def stack1(x, filters, blocks, stride1=2, name=None):
+def stack1(x, filters, blocks, stride1=2, name=None, trainable_bn=True):
   """A set of stacked residual blocks.
 
   Arguments:
@@ -267,17 +291,34 @@ def stack1(x, filters, blocks, stride1=2, name=None):
     blocks: integer, blocks in the stacked blocks.
     stride1: default 2, stride of the first layer in the first block.
     name: string, stack label.
+    trainable_bn: whether to set BatchNormalization layers as trainable.
 
   Returns:
     Output tensor for the stacked blocks.
   """
-  x = block1(x, filters, stride=stride1, name=name + '_block1')
+  x = block1(
+      x,
+      filters,
+      stride=stride1,
+      name=name + '_block1',
+      trainable_bn=trainable_bn)
   for i in range(2, blocks + 1):
-    x = block1(x, filters, conv_shortcut=False, name=name + '_block' + str(i))
+    x = block1(
+        x,
+        filters,
+        conv_shortcut=False,
+        name=name + '_block' + str(i),
+        trainable_bn=trainable_bn)
   return x
 
 
-def block2(x, filters, kernel_size=3, stride=1, conv_shortcut=False, name=None):
+def block2(x,
+           filters,
+           kernel_size=3,
+           stride=1,
+           conv_shortcut=False,
+           name=None
+           trainable_bn=True):
   """A residual block.
 
   Arguments:
@@ -288,6 +329,7 @@ def block2(x, filters, kernel_size=3, stride=1, conv_shortcut=False, name=None):
       conv_shortcut: default False, use convolution shortcut if True,
         otherwise identity shortcut.
       name: string, block label.
+      trainable_bn: whether to set BatchNormalization layers as trainable.
 
   Returns:
     Output tensor for the residual block.
@@ -295,7 +337,10 @@ def block2(x, filters, kernel_size=3, stride=1, conv_shortcut=False, name=None):
   bn_axis = 3 if backend.image_data_format() == 'channels_last' else 1
 
   preact = layers.BatchNormalization(
-      axis=bn_axis, epsilon=1.001e-5, name=name + '_preact_bn')(
+      axis=bn_axis,
+      epsilon=1.001e-5,
+      name=name + '_preact_bn'
+      trainable=trainable_bn)(
           x)
   preact = layers.Activation('relu', name=name + '_preact_relu')(preact)
 
@@ -310,7 +355,10 @@ def block2(x, filters, kernel_size=3, stride=1, conv_shortcut=False, name=None):
       filters, 1, strides=1, use_bias=False, name=name + '_1_conv')(
           preact)
   x = layers.BatchNormalization(
-      axis=bn_axis, epsilon=1.001e-5, name=name + '_1_bn')(
+      axis=bn_axis,
+      epsilon=1.001e-5,
+      name=name + '_1_bn'
+      trainable=trainable_bn)(
           x)
   x = layers.Activation('relu', name=name + '_1_relu')(x)
 
@@ -323,7 +371,10 @@ def block2(x, filters, kernel_size=3, stride=1, conv_shortcut=False, name=None):
       name=name + '_2_conv')(
           x)
   x = layers.BatchNormalization(
-      axis=bn_axis, epsilon=1.001e-5, name=name + '_2_bn')(
+      axis=bn_axis,
+      epsilon=1.001e-5,
+      name=name + '_2_bn',
+      trainable=trainable_bn)(
           x)
   x = layers.Activation('relu', name=name + '_2_relu')(x)
 
@@ -332,7 +383,7 @@ def block2(x, filters, kernel_size=3, stride=1, conv_shortcut=False, name=None):
   return x
 
 
-def stack2(x, filters, blocks, stride1=2, name=None):
+def stack2(x, filters, blocks, stride1=2, name=None, trainable_bn=True):
   """A set of stacked residual blocks.
 
   Arguments:
@@ -341,14 +392,28 @@ def stack2(x, filters, blocks, stride1=2, name=None):
       blocks: integer, blocks in the stacked blocks.
       stride1: default 2, stride of the first layer in the first block.
       name: string, stack label.
+      trainable_bn: whether to set BatchNormalization layers as trainable.
 
   Returns:
       Output tensor for the stacked blocks.
   """
-  x = block2(x, filters, conv_shortcut=True, name=name + '_block1')
+  x = block2(
+      x,
+      filters,
+      conv_shortcut=True,
+      name=name + '_block1',
+      trainable_bn=trainable_bn)
   for i in range(2, blocks):
-    x = block2(x, filters, name=name + '_block' + str(i))
-  x = block2(x, filters, stride=stride1, name=name + '_block' + str(blocks))
+    x = block2(x,
+        filters,
+        name=name + '_block' + str(i),
+        trainable_bn=trainable_bn)
+  x = block2(
+      x,
+      filters,
+      stride=stride1,
+      name=name + '_block' + str(blocks),
+      trainable_bn=trainable_bn)
   return x
 
 
@@ -358,7 +423,8 @@ def block3(x,
            stride=1,
            groups=32,
            conv_shortcut=True,
-           name=None):
+           name=None,
+           trainable_bn=True):
   """A residual block.
 
   Arguments:
@@ -370,6 +436,7 @@ def block3(x,
     conv_shortcut: default True, use convolution shortcut if True,
         otherwise identity shortcut.
     name: string, block label.
+    trainable_bn: whether to set BatchNormalization layers as trainable.
 
   Returns:
     Output tensor for the residual block.
@@ -385,14 +452,20 @@ def block3(x,
         name=name + '_0_conv')(
             x)
     shortcut = layers.BatchNormalization(
-        axis=bn_axis, epsilon=1.001e-5, name=name + '_0_bn')(
+        axis=bn_axis,
+        epsilon=1.001e-5,
+        name=name + '_0_bn',
+        trainable=trainable_bn)(
             shortcut)
   else:
     shortcut = x
 
   x = layers.Conv2D(filters, 1, use_bias=False, name=name + '_1_conv')(x)
   x = layers.BatchNormalization(
-      axis=bn_axis, epsilon=1.001e-5, name=name + '_1_bn')(
+      axis=bn_axis,
+      epsilon=1.001e-5,
+      name=name + '_1_bn',
+      trainable=trainable_bn)(
           x)
   x = layers.Activation('relu', name=name + '_1_relu')(x)
 
@@ -416,7 +489,10 @@ def block3(x,
           x)
   x = layers.Reshape(x_shape + (filters,))(x)
   x = layers.BatchNormalization(
-      axis=bn_axis, epsilon=1.001e-5, name=name + '_2_bn')(
+      axis=bn_axis,
+      epsilon=1.001e-5,
+      name=name + '_2_bn',
+      trainable=trainable_bn)(
           x)
   x = layers.Activation('relu', name=name + '_2_relu')(x)
 
@@ -424,7 +500,10 @@ def block3(x,
       (64 // groups) * filters, 1, use_bias=False, name=name + '_3_conv')(
           x)
   x = layers.BatchNormalization(
-      axis=bn_axis, epsilon=1.001e-5, name=name + '_3_bn')(
+      axis=bn_axis,
+      epsilon=1.001e-5,
+      name=name + '_3_bn',
+      trainable=trainable_bn)(
           x)
 
   x = layers.Add(name=name + '_add')([shortcut, x])
@@ -432,7 +511,13 @@ def block3(x,
   return x
 
 
-def stack3(x, filters, blocks, stride1=2, groups=32, name=None):
+def stack3(x,
+           filters,
+           blocks,
+           stride1=2,
+           groups=32,
+           name=None,
+           trainable_bn=True):
   """A set of stacked residual blocks.
 
   Arguments:
@@ -442,18 +527,26 @@ def stack3(x, filters, blocks, stride1=2, groups=32, name=None):
     stride1: default 2, stride of the first layer in the first block.
     groups: default 32, group size for grouped convolution.
     name: string, stack label.
+    trainable_bn: whether to set BatchNormalization layers as trainable.
 
   Returns:
     Output tensor for the stacked blocks.
   """
-  x = block3(x, filters, stride=stride1, groups=groups, name=name + '_block1')
+  x = block3(
+      x,
+      filters,
+      stride=stride1,
+      groups=groups,
+      name=name + '_block1',
+      trainable_bn=trainable_bn)
   for i in range(2, blocks + 1):
     x = block3(
         x,
         filters,
         groups=groups,
         conv_shortcut=False,
-        name=name + '_block' + str(i))
+        name=name + '_block' + str(i),
+        trainable_bn=trainable_bn)
   return x
 
 
@@ -466,6 +559,7 @@ def ResNet50(include_top=True,
              input_shape=None,
              pooling=None,
              classes=1000,
+             trainable_bn=True,
              **kwargs):
   """Instantiates the ResNet50 architecture."""
 
@@ -475,8 +569,19 @@ def ResNet50(include_top=True,
     x = stack1(x, 256, 6, name='conv4')
     return stack1(x, 512, 3, name='conv5')
 
-  return ResNet(stack_fn, False, True, 'resnet50', include_top, weights,
-                input_tensor, input_shape, pooling, classes, **kwargs)
+  return ResNet(
+      stack_fn,
+      False,
+      True,
+      'resnet50',
+      include_top,
+      weights,
+      input_tensor,
+      input_shape,
+      pooling,
+      classes,
+      trainable_bn,
+      **kwargs)
 
 
 @keras_export('keras.applications.resnet.ResNet101',
@@ -487,6 +592,7 @@ def ResNet101(include_top=True,
               input_shape=None,
               pooling=None,
               classes=1000,
+              trainable_bn=True,
               **kwargs):
   """Instantiates the ResNet101 architecture."""
 
@@ -496,8 +602,19 @@ def ResNet101(include_top=True,
     x = stack1(x, 256, 23, name='conv4')
     return stack1(x, 512, 3, name='conv5')
 
-  return ResNet(stack_fn, False, True, 'resnet101', include_top, weights,
-                input_tensor, input_shape, pooling, classes, **kwargs)
+  return ResNet(
+      stack_fn,
+      False,
+      True,
+      'resnet101',
+      include_top,
+      weights,
+      input_tensor,
+      input_shape,
+      pooling,
+      classes,
+      trainable_bn,
+      **kwargs)
 
 
 @keras_export('keras.applications.resnet.ResNet152',
@@ -508,6 +625,7 @@ def ResNet152(include_top=True,
               input_shape=None,
               pooling=None,
               classes=1000,
+              trainable_bn=True,
               **kwargs):
   """Instantiates the ResNet152 architecture."""
 
@@ -517,8 +635,19 @@ def ResNet152(include_top=True,
     x = stack1(x, 256, 36, name='conv4')
     return stack1(x, 512, 3, name='conv5')
 
-  return ResNet(stack_fn, False, True, 'resnet152', include_top, weights,
-                input_tensor, input_shape, pooling, classes, **kwargs)
+  return ResNet(
+      stack_fn,
+      False,
+      True,
+      'resnet152',
+      include_top,
+      weights,
+      input_tensor,
+      input_shape,
+      pooling,
+      classes,
+      trainable_bn,
+      **kwargs)
 
 
 @keras_export('keras.applications.resnet50.preprocess_input',

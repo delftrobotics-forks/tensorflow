@@ -30,15 +30,27 @@ def ResNet50V2(include_top=True,
                input_tensor=None,
                input_shape=None,
                pooling=None,
-               classes=1000):
+               classes=1000,
+               trainable_bn=True):
   """Instantiates the ResNet50V2 architecture."""
   def stack_fn(x):
-    x = resnet.stack2(x, 64, 3, name='conv2')
-    x = resnet.stack2(x, 128, 4, name='conv3')
-    x = resnet.stack2(x, 256, 6, name='conv4')
-    return resnet.stack2(x, 512, 3, stride1=1, name='conv5')
-  return resnet.ResNet(stack_fn, True, True, 'resnet50v2', include_top, weights,
-                       input_tensor, input_shape, pooling, classes)
+    x = resnet.stack2(x, 64, 3, name='conv2', trainable_bn=trainable_bn)
+    x = resnet.stack2(x, 128, 4, name='conv3', trainable_bn=trainable_bn)
+    x = resnet.stack2(x, 256, 6, name='conv4', trainable_bn=trainable_bn)
+    return resnet.stack2(x, 512, 3, stride1=1, name='conv5',
+                         trainable_bn=trainable_bn)
+  return resnet.ResNet(
+      stack_fn,
+      True,
+      True,
+      'resnet50v2',
+      include_top,
+      weights,
+      input_tensor,
+      input_shape,
+      pooling,
+      classes,
+      trainable_bn)
 
 
 @keras_export('keras.applications.resnet_v2.ResNet101V2',
@@ -48,15 +60,27 @@ def ResNet101V2(include_top=True,
                 input_tensor=None,
                 input_shape=None,
                 pooling=None,
-                classes=1000):
+                classes=1000,
+                trainable_bn=True):
   """Instantiates the ResNet101V2 architecture."""
   def stack_fn(x):
-    x = resnet.stack2(x, 64, 3, name='conv2')
-    x = resnet.stack2(x, 128, 4, name='conv3')
-    x = resnet.stack2(x, 256, 23, name='conv4')
-    return resnet.stack2(x, 512, 3, stride1=1, name='conv5')
-  return resnet.ResNet(stack_fn, True, True, 'resnet101v2', include_top,
-                       weights, input_tensor, input_shape, pooling, classes)
+    x = resnet.stack2(x, 64, 3, name='conv2', trainable_bn=trainable_bn)
+    x = resnet.stack2(x, 128, 4, name='conv3', trainable_bn=trainable_bn)
+    x = resnet.stack2(x, 256, 23, name='conv4', trainable_bn=trainable_bn)
+    return resnet.stack2(x, 512, 3, stride1=1, name='conv5',
+                         trainable_bn=trainable_bn)
+  return resnet.ResNet(
+      stack_fn,
+      True,
+      True,
+      'resnet101v2',
+      include_top,
+      weights,
+      input_tensor,
+      input_shape,
+      pooling,
+      classes,
+      trainable_bn)
 
 
 @keras_export('keras.applications.resnet_v2.ResNet152V2',
@@ -66,15 +90,27 @@ def ResNet152V2(include_top=True,
                 input_tensor=None,
                 input_shape=None,
                 pooling=None,
-                classes=1000):
+                classes=1000
+                trainable_bn=True):
   """Instantiates the ResNet152V2 architecture."""
   def stack_fn(x):
-    x = resnet.stack2(x, 64, 3, name='conv2')
-    x = resnet.stack2(x, 128, 8, name='conv3')
-    x = resnet.stack2(x, 256, 36, name='conv4')
-    return resnet.stack2(x, 512, 3, stride1=1, name='conv5')
-  return resnet.ResNet(stack_fn, True, True, 'resnet152v2', include_top,
-                       weights, input_tensor, input_shape, pooling, classes)
+    x = resnet.stack2(x, 64, 3, name='conv2', trainable_bn=trainable_bn)
+    x = resnet.stack2(x, 128, 8, name='conv3', trainable_bn=trainable_bn)
+    x = resnet.stack2(x, 256, 36, name='conv4', trainable_bn=trainable_bn)
+    return resnet.stack2(x, 512, 3, stride1=1, name='conv5',
+                         trainable_bn=trainable_bn)
+  return resnet.ResNet(
+      stack_fn,
+      True,
+      True,
+      'resnet152v2',
+      include_top,
+      weights,
+      input_tensor,
+      input_shape,
+      pooling,
+      classes,
+      trainable_bn)
 
 
 @keras_export('keras.applications.resnet_v2.preprocess_input')
